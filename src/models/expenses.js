@@ -11,7 +11,7 @@ const expenseSchema = new mongoose.Schema(
     type: {
         type: String,
         required: true,
-        enum: ["income", "expense"],
+        enum: ["income", "expense", "type"],
     },
 
     amount: {
@@ -41,11 +41,6 @@ const expenseSchema = new mongoose.Schema(
         type: Date,
         default: Date.now,
     },
-
-    isOverBudget: {
-        type: Boolean,
-        default: false
-    }
   },
   {
     timestamps: true,

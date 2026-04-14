@@ -38,6 +38,19 @@ const userSchema = new mongoose.Schema({
             }
         }
     },
+    phoneNumber: {
+        type: String,
+        trim: true,
+        validate(value) {
+            if (value && !validator.isMobilePhone(value, 'any')) {
+                throw new Error('Phone number is invalid');
+            }
+        }
+    },
+    budget: {
+        type: Number,
+        default: 0
+    },
     tokens: [{
     token: {
         type: String,

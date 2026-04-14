@@ -30,7 +30,6 @@ router.post('/user/signup', async(req, res) => {
 });
 
 router.post('/user/login', async(req, res) => {
-  const {email, password} = req.body;
   try {
     const user = await 
     User.findByCredentials(req.body.email, req.body.password);
@@ -55,7 +54,7 @@ router.post('/user/logout', async(req, res) => {
 router.patch('/user/me', auth, async(req, res) => {
     try{
         const updates = Object.keys(req.body);
-        const allowedUpdates = ['name', 'email', 'password'];
+        const allowedUpdates = ['name', 'email', 'password', 'phoneNumber', 'budget'];
         const isValidOperation = updates.every((update) => allowedUpdates.includes(update));
         if (!isValidOperation) {
             return res.status(400).send({error: 'Invalid updates'});

@@ -17,9 +17,38 @@ expenseRouter.post('/expenses', auth, async(req, res) => {
     try{
         const expense = new Expense({ ...req.body, user: req.user._id,});
         await expense.save();
+
+        const result = await Expense.aggregate([
+      {
+        $match: {
+          user: req.user._id,
+          type: "expense"
+        }
+      },
+      {
+        $group: {
+          _id: null,
+          total: { $sum: "$amount" }
+        }
+      }
+    ]);
+
+    const totalSpent = result[0]?.total || 0;
+    const budget = req.user.budget;
+
+    let warning = null;
+
+    if (budget > 0) {
+    if (totalSpent > budget) {
+        warning = "🚨 Budget exceeded!";
+    } else if (totalSpent > budget * 0.8) {
+        warning = "⚠️ You are close to your budget limit";
+    }
+    }
+
         return res.status(201).send({message: 'Expense created successfully', expense})
     }catch(error){ {
-        return res.status(400).send({message: 'Error creating expense', error: error.message})
+        return res.status(400).send({message: 'Error creating expense', error: error.message, warning, totalSpent, budget});
     }
 }
 });

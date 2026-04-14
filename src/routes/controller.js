@@ -4,6 +4,130 @@ import { auth } from '../middlewares/auth.js';
 
 const controllerRouter = express.Router();
 
+controllerRouter.get("/expenses/insights", auth, async (req, res) => {
+  try {
+    const userId = req.user._id;
+
+    const summaryResult = await Expense.aggregate([
+      { $match: { user: userId } },
+      {
+        $group: {
+          _id: "$type",
+          total: { $sum: "$amount" }
+        }
+      }
+    ]);
+    
+
+    let totalIncome = 0;
+    let totalExpense = 0;
+    let totalAssets = 0;
+
+    summaryResult.forEach(item => {
+      if (item._id === "income") totalIncome = item.total;
+      if (item._id === "expense") totalExpense = item.total;
+      if (item._id === "assets") totalAssets = item.total;
+    });
+
+    const balance = totalIncome - totalExpense;
+
+    let spentPercent = 0;
+    let investedPercent = 0;
+    let savedPercent = 0;
+
+    if (totalIncome > 0) {
+    spentPercent = ((totalExpense / totalIncome) * 100).toFixed(1);
+    investedPercent = ((totalAssets / totalIncome) * 100).toFixed(1);
+    savedPercent = ((balance / totalIncome) * 100).toFixed(1);
+    }
+
+    const trends = await Expense.aggregate([
+      { $match: { user: userId, type: "expense" } },
+      {
+        $group: {
+          _id: {
+            year: { $year: "$date" },
+            month: { $month: "$date" }
+          },
+          totalExpense: { $sum: "$amount" }
+        }
+      },
+      {
+        $sort: {
+          "_id.year": 1,
+          "_id.month": 1
+        }
+      }
+    ]);
+
+    const monthlyTrends = trends.map(item => ({
+      month: `${item._id.year}-${String(item._id.month).padStart(2, "0")}`,
+      totalExpense: item.totalExpense
+    }));
+
+    let insights = [];
+
+    if (monthlyTrends.length >= 2) {
+      const last = monthlyTrends[monthlyTrends.length - 1];
+      const prev = monthlyTrends[monthlyTrends.length - 2];
+
+      if (last.totalExpense > prev.totalExpense) {
+        insights.push("You spent more this month than last month");
+      } else if (last.totalExpense < prev.totalExpense) {
+        insights.push("You spent less this month than last month");
+      }
+    }
+
+    if (monthlyTrends.length > 0) {
+      const highest = monthlyTrends.reduce((max, item) =>
+        item.totalExpense > max.totalExpense ? item : max
+      );
+
+      insights.push(`Your highest spending month is ${highest.month}`);
+    }
+
+    let warning = null;
+    const budget = req.user.budget;
+
+    if (budget > 0) {
+      if (totalExpense > budget) {
+        warning = "🚨 Budget exceeded!";
+      } else if (totalExpense > budget * 0.8) {
+        warning = "⚠️ You are close to your budget limit";
+      }
+    }
+
+    if (totalExpense > totalAssets) {
+    insights.push("You are spending more than you are investing");
+    } else if (totalAssets > totalExpense) {
+    insights.push("Good job! You are investing more than spending");
+    }
+
+    res.send({
+      summary: {
+        totalIncome,
+        totalExpense,
+        totalAssets,
+        balance
+      },
+      ratios: {
+        spent: spentPercent + "%",
+        invested: investedPercent + "%",
+        saved: savedPercent + "%"
+    },
+      monthlyTrends,        
+      insights,         
+      warning
+    });
+
+  } catch (error) {
+    res.status(500).send({
+      message: "Error generating financial insights",
+      error: error.message
+    });
+  }
+});
+
 controllerRouter.get("/expenses/summary", auth, async (req, res) => {
   try {
     const { startDate, endDate } = req.query;
@@ -34,17 +158,43 @@ controllerRouter.get("/expenses/summary", auth, async (req, res) => {
       },
     ]);
 
+    const totalSpent = result[0]?.total || 0;
+    const budget = req.user.budget;
+
+    let warning = null;
+    let insights = [];
+
+    if (budget > 0) {
+    if (totalSpent > budget) {
+        warning = "🚨 Budget exceeded!";
+    } else if (totalSpent > budget * 0.8) {
+        warning = "⚠️ You are close to your budget limit";
+    }
+    }
+
     let totalIncome = 0;
     let totalExpense = 0;
+    let totalAssets = 0;
 
     result.forEach((item) => {
       if (item._id === "income") totalIncome = item.total;
       if (item._id === "expense") totalExpense = item.total;
+      if (item._id === "assets") totalAssets = item.total;
     });
+
+    if (totalExpense > totalAssets) {
+    insights.push("You are spending more than you are investing");
+    } else if (totalAssets > totalExpense) {
+    insights.push("Good job! You are investing more than spending");
+    }
+
+    if (totalExpense > totalIncome) {
+    insights.push("You are spending more than you earn");
+    }
 
     const balance = totalIncome - totalExpense;
 
-    res.send({ totalIncome, totalExpense, balance });
+    res.send({ totalIncome, totalExpense, totalAssets, balance, insights, warning, totalSpent, budget });
 
   } catch (error) {
     res.status(500).send({
@@ -95,16 +245,30 @@ controllerRouter.get("/expenses/monthly-trends", auth, async (req, res) => {
       {
         $match: {
           user: req.user._id,
-          type: "expense"
         }
       },
       {
         $group: {
           _id: {
             year: { $year: "$date" },
-            month: { $month: "$date" }
+            month: { $month: "$date"}
           },
-          totalExpense: { $sum: "$amount" }
+            totalExpense: {
+            $sum: {
+            $cond: [{ $eq: ["$type", "expense"] }, "$amount", 0]
+                }
+            },
+
+            totalIncome: {
+                $sum: {
+                $cond: [{ $eq: ["$type", "income"] }, "$amount", 0]
+                }
+            },
+            totalAssets: {
+                $sum: {
+                $cond: [{ $eq: ["$type", "type"] }, "$amount", 0]
+                }
+            }
         }
       },
       {
@@ -118,7 +282,9 @@ controllerRouter.get("/expenses/monthly-trends", auth, async (req, res) => {
     // format output
     const formatted = result.map(item => ({
       month: `${item._id.year}-${String(item._id.month).padStart(2, "0")}`,
-      totalExpense: item.totalExpense
+      totalExpense: item.totalExpense,
+      totalIncome: item.totalIncome,
+      totalAssets: item.totalAssets
     }));
 
     res.send(formatted);
