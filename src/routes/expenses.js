@@ -45,7 +45,6 @@ expenseRouter.post('/expenses', auth, async(req, res) => {
         warning = "⚠️ You are close to your budget limit";
     }
     }
-
         return res.status(201).send({message: 'Expense created successfully', expense})
     }catch(error){ {
         return res.status(400).send({message: 'Error creating expense', error: error.message, warning, totalSpent, budget});
