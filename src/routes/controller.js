@@ -17,7 +17,6 @@ controllerRouter.get("/expenses/insights", auth, async (req, res) => {
         }
       }
     ]);
-    
 
     let totalIncome = 0;
     let totalExpense = 0;
