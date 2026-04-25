@@ -11,7 +11,7 @@ const expenseSchema = new mongoose.Schema(
     type: {
         type: String,
         required: true,
-        enum: ["income", "expense", "type"],
+        enum: ["income", "expense", "asset"],
     },
 
     amount: {
