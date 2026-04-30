@@ -13,7 +13,7 @@ expenseRouter.get('/expenses', auth, async(req, res) => {
     }
 });
 
-expenseRouter.post('/expenses', auth, async(req, res) => {
+expenseRouter.post('/expenses/create', auth, async(req, res) => {
     try{
         const expense = new Expense({ ...req.body, user: req.user._id,});
         await expense.save();
