@@ -6,7 +6,7 @@ const expenseRouter = express.Router();
 
 expenseRouter.get('/expenses', auth, async(req, res) => {
     try {
-        const expenses = await Expense.findOne({user: req.user._id});
+        const expenses = await Expense.find({user: req.user._id});
         return res.send({expenses});
     }catch(error){
         return res.status(500).send({message: 'Error fetching expenses', error: error.message});
